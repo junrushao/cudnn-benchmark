@@ -2,8 +2,20 @@
 #include <cstdlib>
 #include <iostream>
 #include <unordered_map>
+#include <string>
+#include <limits>
+#include <time.h>
 #include "timer.h"
 #include "rnn.h"
+
+
+void print_time(int cnt) {
+  time_t rawtime;
+  struct tm * timeinfo;
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+  fprintf(stderr, "cnt = %d, time = %s", cnt, asctime(timeinfo));
+}
 
 
 template <typename T>
@@ -46,28 +58,28 @@ void run(int seq_len, const Rnn::Config &config) {
   }
   void *x;
   void *y;
-  std::cout << "xDesc[0].data_bytes = " << xDesc[0].data_bytes << std::endl;
-  std::cout << "yDesc[0].data_bytes = " << yDesc[0].data_bytes << std::endl;
   CUDA(Malloc(&x, xDesc[0].data_bytes * seq_len));
   CUDA(Malloc(&y, yDesc[0].data_bytes * seq_len));
-
-  const int cold_start_times = 1000;
-  const int benchmark_times = 10000;
+  const int cold_start_times = 100;
+  const int benchmark_times = 1000;
   for (int i = 0; i < cold_start_times; ++i) {
-    rnn.forward_inference(
-      /*handle=*/handle,
-      /*seq_len=*/seq_len,
-      /*xDesc=*/xDesc,
-      /*x=*/x,
-      /*hxDesc=*/hxDesc,
-      /*cxDesc=*/cxDesc,
-      /*yDesc=*/yDesc,
-      /*y=*/y,
-      /*hyDesc=*/hyDesc,
-      /*cyDesc=*/cyDesc
-    );
+    try {
+      rnn.forward_inference(
+        /*handle=*/handle,
+        /*seq_len=*/seq_len,
+        /*xDesc=*/xDesc,
+        /*x=*/x,
+        /*hxDesc=*/hxDesc,
+        /*cxDesc=*/cxDesc,
+        /*yDesc=*/yDesc,
+        /*y=*/y,
+        /*hyDesc=*/hyDesc,
+        /*cyDesc=*/cyDesc
+      );
+    } catch (const std::runtime_error &error) {
+      return;
+    }
   }
-  std::cout << "Start benchmarking!" << std::endl;
   double startTime = CycleTimer::currentSeconds();
   for (int i = 0; i < benchmark_times; ++i) {
     rnn.forward_inference(
@@ -84,11 +96,14 @@ void run(int seq_len, const Rnn::Config &config) {
     );
   }
   double endTime = CycleTimer::currentSeconds();
+  CUDA(Free(x));
+  CUDA(Free(y));
   printf("Average time used: %.4f ms\n", (endTime - startTime) * 1000 / benchmark_times);
 }
 
 
 int main(int argc, const char* argv[]) {
+  using namespace std;
   CUDA(SetDevice(/*gpu_id=*/0));
   Rnn::Config config;
   int seq_len;
@@ -115,7 +130,7 @@ int main(int argc, const char* argv[]) {
     puts("Usage: ./main [seq_len] [batch_size] [hidden_size] [n_layers] [direction] [mode] [algo]");
     return 1;
   }
-  std::cout << "==============================" << std::endl;
+  std::cout << "============================================================" << std::endl;
   std::cout << "Sequence length = " << seq_len << std::endl;
   std::cout << "Batch size = " << config.batch_size << std::endl;
   std::cout << "Hidden size = " << config.hidden_size << std::endl;
@@ -124,7 +139,7 @@ int main(int argc, const char* argv[]) {
   std::cout << "Direction = " << to_string(config.direction) << std::endl;
   std::cout << "RNN mode = " << to_string(config.mode) << std::endl;
   std::cout << "Algo = " << to_string(config.algo) << std::endl;
-  std::cout << "==============================" << std::endl;
+  std::cout << "============================================================" << std::endl;
   run(seq_len, config);
   return 0;
 }

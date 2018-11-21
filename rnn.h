@@ -137,7 +137,6 @@ public:
       /*sizeInBytes=*/&new_workspace_size
     ));
     if (new_workspace_size > workspace_size) {
-      std::cout << "Reallocate workspace size = " << new_workspace_size << std::endl;
       workspace_size = new_workspace_size;
       if (workspace != nullptr) {
         CUDA(Free(workspace));
