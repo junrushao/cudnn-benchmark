@@ -19,6 +19,7 @@ public:
 public:
   DropoutDesc desc{nullptr};
   Config config;
+  void *state{nullptr};
 public:
   DropoutStruct(const Config &config):
     desc(cudnn_handles_auto_export::CreateDropoutDesc()),
@@ -26,6 +27,14 @@ public:
   {
   }
   ~DropoutStruct() {}
+  n_bytes_t get_state_size(const Context &ctx) const {
+    if (config.dropout == 0.0) {
+      return 0;
+    }
+    size_t state_size;
+    CUDNN(DropoutGetStatesSize(ctx.get(), &state_size));
+    return state_size;
+  }
 };
 using DropoutU = std::unique_ptr<DropoutStruct>;
 using DropoutS = std::shared_ptr<DropoutStruct>;

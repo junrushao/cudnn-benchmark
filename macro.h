@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sstream>
+#include "cuda.h"
 
 #define NO_COPY_MOVE_ASSIGN(T)                \
         T(T const &) = delete;                \

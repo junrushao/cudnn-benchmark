@@ -8,3 +8,4 @@
 #include "dropout.h"
 #include "seq.h"
 #include "rnn.h"
+#include "memory_allocator.h"
