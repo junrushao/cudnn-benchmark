@@ -107,26 +107,96 @@ public:
 												 const State &stateY)
 	{
     CUDNN(RNNForwardInference(
-      /*handle*/ctx.get(),
-      /*rnnDesc*/desc.get(),
-      /*seqLength*/seqX->steps.size(),
-      /*xDesc*/seqX->raw_steps.data(),
-      /*x*/seqX->data,
-      /*hxDesc*/stateX.h->desc.get(),
-      /*hx*/stateX.h ? stateX.h->data : NULL,
-      /*cxDesc*/stateX.c->desc.get(),
-      /*cx*/stateX.c ? stateX.c->data : NULL,
-      /*wDesc*/filter->desc.get(),
-      /*w*/filter->data,
-      /*yDesc*/seqY->raw_steps.data(),
-      /*y*/seqY->data,
-      /*hyDesc*/stateY.h->desc.get(),
-      /*hy*/stateY.h ? stateY.h->data : NULL,
-      /*cyDesc*/stateY.c->desc.get(),
-      /*cy*/stateY.c ? stateY.c->data : NULL,
-      /*workspace*/workspace,
-      /*workSpaceSizeInBytes*/workspace_size
+      /*handle*/		ctx.get(),
+      /*rnnDesc*/		desc.get(),
+      /*seqLength*/	seqX->steps.size(),
+      /*xDesc*/			seqX->raw_steps.data(),
+      /*x*/					seqX->data,
+      /*hxDesc*/		stateX.h ? stateX.h->desc.get() : NULL,
+      /*hx*/				stateX.h ? stateX.h->data 			: NULL,
+      /*cxDesc*/		stateX.c ? stateX.c->desc.get() : NULL,
+      /*cx*/				stateX.c ? stateX.c->data 			: NULL,
+      /*wDesc*/			filter->desc.get(),
+      /*w*/					filter->data,
+      /*yDesc*/			seqY->raw_steps.data(),
+      /*y*/					seqY->data,
+      /*hyDesc*/		stateY.h ? stateY.h->desc.get() : NULL,
+      /*hy*/				stateY.h ? stateY.h->data 			: NULL,
+      /*cyDesc*/		stateY.c ? stateY.c->desc.get() : NULL,
+      /*cy*/				stateY.c ? stateY.c->data 			: NULL,
+      /*workspace*/							workspace,
+      /*workSpaceSizeInBytes*/	workspace_size
     ));
+	}
+	void get_weight_region(const Context &ctx,
+												 int layer,
+												 int region,
+												 void *&data,
+												 n_bytes_t &size,
+												 std::vector<int> &shape) {
+	  using FilterDesc = cudnn_handles_auto_export::FilterDesc;
+		FilterDesc region_desc = cudnn_handles_auto_export::CreateFilterDesc();
+		TensorU input(new TensorStruct(dtype, {1, config.input_size, 1}));
+    CUDNN(GetRNNLinLayerMatrixParams(
+      /*handle=*/ctx.get(),
+      /*rnnDesc=*/desc.get(),
+      /*pseudoLayer=*/layer,
+      /*xDesc=*/input->desc.get(),
+      /*wDesc=*/filter->desc.get(),
+      /*w=*/filter->data,
+      /*linLayerID=*/region,
+      /*linLayerMatDesc=*/region_desc.get(),
+      /*linLayerMat=*/&data
+		));
+		DType _dtype{DType::kFloat};
+		TensorFormat _fmt{TensorFormat::kNCHW};
+		int _ndims = 3;
+		int _shape[] = {1, 1, 1};
+    CUDNN(GetFilterNdDescriptor(
+      /*wDesc=*/region_desc.get(),
+      /*nbDimsRequested=*/3,
+      /*dataType=*/&_dtype.v,
+      /*format=*/&_fmt.v,
+      /*nbDims=*/&_ndims,
+    	/*filterDimA=*/_shape
+    ));
+		shape = {_shape[0], _shape[1], _shape[2]};
+		size = _dtype.size_of() * _shape[0] * _shape[1] * _shape[2];
+	}
+	void get_bias_region(const Context &ctx,
+												 int layer,
+												 int region,
+												 void *&data,
+												 n_bytes_t &size,
+												 std::vector<int> &shape) {
+	  using FilterDesc = cudnn_handles_auto_export::FilterDesc;
+		FilterDesc region_desc = cudnn_handles_auto_export::CreateFilterDesc();
+		TensorU input(new TensorStruct(dtype, {1, config.input_size, 1}));
+    CUDNN(GetRNNLinLayerBiasParams(
+      /*handle=*/ctx.get(),
+      /*rnnDesc=*/desc.get(),
+      /*pseudoLayer=*/layer,
+      /*xDesc=*/input->desc.get(),
+      /*wDesc=*/filter->desc.get(),
+      /*w=*/filter->data,
+      /*linLayerID=*/region,
+      /*linLayerMatDesc=*/region_desc.get(),
+      /*linLayerMat=*/&data
+		));
+		DType _dtype{DType::kFloat};
+		TensorFormat _fmt{TensorFormat::kNCHW};
+		int _ndims = 3;
+		int _shape[] = {1, 1, 1};
+    CUDNN(GetFilterNdDescriptor(
+      /*wDesc=*/region_desc.get(),
+      /*nbDimsRequested=*/3,
+      /*dataType=*/&_dtype.v,
+      /*format=*/&_fmt.v,
+      /*nbDims=*/&_ndims,
+    	/*filterDimA=*/_shape
+    ));
+		shape = {_shape[0], _shape[1], _shape[2]};
+		size = _dtype.size_of() * _shape[0] * _shape[1] * _shape[2];
 	}
 };
 using RNNU = std::unique_ptr<RNNStruct>;

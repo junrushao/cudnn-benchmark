@@ -179,6 +179,15 @@ public:
       SWITCH_DEFAULT();
     }
   }
+  int n_region_per_layer() const {
+    switch (this->v) {
+      SWITCH_RETURN(RNN_RELU, 2);
+      SWITCH_RETURN(RNN_TANH, 2);
+      SWITCH_RETURN(GRU, 6);
+      SWITCH_RETURN(LSTM, 8);
+      SWITCH_DEFAULT();
+    }
+  }
 public:
   DECLARE_ENUM_INSIDE(CellType, kReLU, RNN_RELU);
   DECLARE_ENUM_INSIDE(CellType, kTanH, RNN_TANH);

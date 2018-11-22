@@ -49,6 +49,14 @@ public:
                      const DType &dtype):
     SeqStruct(std::vector<int>(seq_len, batch_size), vec_size, dtype) {
   }
+  void get_step_region(int step, void *&data, n_bytes_t &size) {
+    n_bytes_t offset = 0;
+    for (int i = 0; i + 1 < step; ++i) {
+      offset += steps[i]->size;
+    }
+    data = (char *) this->data + offset * dtype.size_of();
+    size = steps.at(step)->size;
+  }
 };
 using SeqU = std::unique_ptr<SeqStruct>;
 using SeqS = std::shared_ptr<SeqStruct>;

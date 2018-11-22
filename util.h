@@ -37,17 +37,16 @@ void copyToDevice(void *dst, const std::vector<T> &src) {
 
 template <typename T>
 void copyToHost(const std::vector<T> &dst, void *src) {
-  CUDA(Memcpy(dst.data(), src, dst.size() * sizeof(T), cudaMemcpyHostToDevice));
+  CUDA(Memcpy((void *)dst.data(), src, dst.size() * sizeof(T), cudaMemcpyDeviceToHost));
 }
 
 template <typename T>
 void print(const std::string &name, const std::vector<int> &shape, const std::vector<T> &src) {
-  std::cout << "[" << name << "]" << std::endl;
-  std::cout << "\tshape:";
+  std::cout << name << ", shape =";
   for (int v : shape) {
     std::cout << ' ' << v;
   }
-  std::cout << std::endl << '\t';
+  std::cout << std::endl << "  ";
   for (T v : src) {
     std::cout << ' ' << v ;
   }
