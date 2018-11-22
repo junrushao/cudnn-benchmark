@@ -49,6 +49,10 @@ public:
 	RNNDesc desc{nullptr};
 	DType dtype{DType::kFloat};
   FilterU filter{nullptr};
+public:
+	n_bytes_t workspace_size{0};
+	void *workspace{nullptr};
+public:
 	// TODO(@junrushao1994): add cudnnPersistentRNNPlan_t for dynamic persistent mode
   explicit RNNStruct(const Context &ctx,
 							 			 const Config &config,
@@ -95,6 +99,34 @@ public:
 		} else {
 			return State(1, dtype, {n_layers * n_dirs, batch_size, hidden_size});
 		}
+	}
+	void forward_inference(const Context &ctx,
+												 const SeqU &seqX,
+												 const State &stateX,
+												 const SeqU &seqY,
+												 const State &stateY)
+	{
+    CUDNN(RNNForwardInference(
+      /*handle*/ctx.get(),
+      /*rnnDesc*/desc.get(),
+      /*seqLength*/seqX->steps.size(),
+      /*xDesc*/seqX->raw_steps.data(),
+      /*x*/seqX->data,
+      /*hxDesc*/stateX.h->desc.get(),
+      /*hx*/stateX.h ? stateX.h->data : NULL,
+      /*cxDesc*/stateX.c->desc.get(),
+      /*cx*/stateX.c ? stateX.c->data : NULL,
+      /*wDesc*/filter->desc.get(),
+      /*w*/filter->data,
+      /*yDesc*/seqY->raw_steps.data(),
+      /*y*/seqY->data,
+      /*hyDesc*/stateY.h->desc.get(),
+      /*hy*/stateY.h ? stateY.h->data : NULL,
+      /*cyDesc*/stateY.c->desc.get(),
+      /*cy*/stateY.c ? stateY.c->data : NULL,
+      /*workspace*/workspace,
+      /*workSpaceSizeInBytes*/workspace_size
+    ));
 	}
 };
 using RNNU = std::unique_ptr<RNNStruct>;

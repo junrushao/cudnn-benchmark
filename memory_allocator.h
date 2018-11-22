@@ -35,36 +35,52 @@ public:
     }
   }
 public:
-  void visit(const Context &ctx, TensorStruct &v) {
-    alloc(v.data, v.size * v.dtype.size_of());
+  template <typename T>
+  void visit_state(const Context &ctx, T &v);
+public:
+  void visit_state(const Context &ctx, TensorU &v) {
+    alloc(v->data, v->size * v->dtype.size_of());
   }
-  void visit(const Context &ctx, FilterStruct &v) {
-    alloc(v.data, v.size * v.dtype.size_of());
+  void visit_state(const Context &ctx, FilterU &v) {
+    alloc(v->data, v->size * v->dtype.size_of());
   }
-  void visit(const Context &ctx, DropoutStruct &v) {
-    n_bytes_t state_size = v.get_state_size(ctx);
-    alloc(v.state, state_size);
+  void visit_state(const Context &ctx, DropoutU &v) {
+    n_bytes_t state_size = v->get_state_size(ctx);
+    alloc(v->state, state_size);
     CUDNN(SetDropoutDescriptor(
-        /*dropoutDesc=*/v.desc.get(),
-        /*handle=*/ctx.get(),
-        /*dropout=*/v.config.dropout,
-        /*states=*/v.state,
-        /*stateSizeInBytes=*/state_size,
-        /*seed=*/(v.config.seed == 0ULL ? time(NULL) : v.config.seed))
-      );
+      /*dropoutDesc=*/v->desc.get(),
+      /*handle=*/ctx.get(),
+      /*dropout=*/v->config.dropout,
+      /*states=*/v->state,
+      /*stateSizeInBytes=*/state_size,
+      /*seed=*/(v->config.seed == 0ULL ? time(NULL) : v->config.seed))
+    );
   }
-  void visit(const Context &ctx, RNNStruct &v) {
-    visit(ctx, *v.filter);
+  void visit_state(const Context &ctx, RNNU &v) {
+    visit_state(ctx, v->filter);
   }
-  void visit(const Context &ctx, RNNStruct::State &v) {
+  void visit_state(const Context &ctx, RNNStruct::State &v) {
     if (v.h != nullptr) {
-      visit(ctx, *v.h);
+      visit_state(ctx, v.h);
     }
     if (v.c != nullptr) {
-      visit(ctx, *v.c);
+      visit_state(ctx, v.c);
     }
   }
-  void visit(const Context &ctx, SeqStruct &v) {
-    alloc(v.data, v.size * v.dtype.size_of());
+  void visit_state(const Context &ctx, SeqU &v) {
+    alloc(v->data, v->size * v->dtype.size_of());
+  }
+  void visit_workspace(const Context &ctx, const SeqU &seq, RNNU &v) {
+    size_t _workspace_size = 0;
+    CUDNN(GetRNNWorkspaceSize(
+      /*handle=*/ctx.get(),
+      /*cudnnRNNDescriptor_t=*/v->desc.get(),
+      /*seqLength=*/seq->raw_steps.size(),
+      /*xDesc=*/seq->raw_steps.data(),
+      /*sizeInBytes=*/&_workspace_size
+    ));
+    n_bytes_t workspace_size = static_cast<n_bytes_t>(_workspace_size);
+    v->workspace_size = workspace_size;
+    alloc(v->workspace, workspace_size);
   }
 };

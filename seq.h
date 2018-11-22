@@ -38,9 +38,9 @@ public:
     raw_steps.reserve(seq_len);
     for (int batch_size: batch_sizes) {
       TensorU tensor(new TensorStruct(dtype, {batch_size, vec_size, 1}));
+      size += tensor->size;
       raw_steps.emplace_back(tensor->desc.get());
       steps.emplace_back(std::move(tensor));
-      size += tensor->size;
     }
   }
   explicit SeqStruct(int seq_len,
