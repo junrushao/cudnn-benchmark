@@ -1,43 +1,40 @@
 #pragma once
 
 #include <cudnn.h>
-#include "./util.h"
+#include <memory>
+#include <time.h>
 
-struct Dropout {
+#include "cudnn_handles.h"
+#include "cudnn_enums.h"
+
+struct DropoutStruct {
 public:
-  cudnnDropoutDescriptor_t desc = nullptr;
-  size_t state_size = 0;
-  void *states = nullptr;
+  using Context = cudnn_handles_auto_export::Context;
+  using DropoutDesc = cudnn_handles_auto_export::DropoutDesc;
 public:
-  explicit Dropout(const DnnHandle &handle,
-                   float dropout = 0.0,
-                   unsigned long long seed = 0) {
-    // this->desc
-    CUDNN(CreateDropoutDescriptor(&desc));
-    if (dropout == 0.0) {
-      // this->state_size
-      CUDNN(DropoutGetStatesSize(handle.handle, &state_size));
-      // this->states
-      CUDA(Malloc(&states, state_size));
-      CUDNN(SetDropoutDescriptor(
-        /*dropoutDesc=*/desc,
-        /*handle=*/handle.handle,
-        /*dropout=*/dropout,
-        /*states=*/states,
-        /*stateSizeInBytes=*/state_size,
-        /*seed=*/(seed == 0ULL ? time(NULL) : seed))
-      );
-    } else {
-      this->state_size = 0;
-      this->states = nullptr;
-    }
+  struct Config {
+    float dropout{0.0};
+    seed_t seed{0};
+  };
+public:
+  DropoutDesc desc{nullptr};
+  Config config;
+  void *state{nullptr};
+public:
+  DropoutStruct(const Config &config):
+    desc(cudnn_handles_auto_export::CreateDropoutDesc()),
+    config(config)
+  {
   }
-  ~Dropout() {
-    if (desc != nullptr) {
-      CUDNN(DestroyDropoutDescriptor(this->desc));
+  ~DropoutStruct() {}
+  n_bytes_t get_state_size(const Context &ctx) const {
+    if (config.dropout == 0.0) {
+      return 0;
     }
-    if (states != nullptr) {
-      CUDA(Free(states));
-    }
+    size_t state_size;
+    CUDNN(DropoutGetStatesSize(ctx.get(), &state_size));
+    return state_size;
   }
 };
+using DropoutU = std::unique_ptr<DropoutStruct>;
+using DropoutS = std::shared_ptr<DropoutStruct>;

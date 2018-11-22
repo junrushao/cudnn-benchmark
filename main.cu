@@ -1,145 +1,123 @@
-#include <cassert>
-#include <cstdlib>
 #include <iostream>
-#include <unordered_map>
-#include <string>
-#include <limits>
-#include <time.h>
 #include "timer.h"
-#include "rnn.h"
+#include "util.h"
+#include "assert.h"
 
+using DType = cudnn_enums_auto_export::DType;
+using Context = cudnn_handles_auto_export::Context;
 
-void print_time(int cnt) {
-  time_t rawtime;
-  struct tm * timeinfo;
-  time(&rawtime);
-  timeinfo = localtime(&rawtime);
-  fprintf(stderr, "cnt = %d, time = %s", cnt, asctime(timeinfo));
-}
+struct RunConfig {
+  int seq_len{1};
+  int hidden_size{2};
+  RNNStruct::CellType cell{RNNStruct::CellType::kReLU};
+  RNNStruct::Algo algo{RNNStruct::Algo::kStandard};
+  int n_layers{1};
+  int batch_size{1};
+  RNNStruct::InputMode input_mode{RNNStruct::InputMode::kSkipInput};
+  DType dtype{DType::kFloat};
+};
 
+void run() {
+  RunConfig rconfig;
+  Context ctx = cudnn_handles_auto_export::CreateContext();
+  RNNU rnn = std::make_unique<RNNStruct>(
+    ctx,
+    RNNStruct::Config{
+      /*input_size=*/rconfig.hidden_size,
+      /*hidden_size=*/rconfig.hidden_size,
+      /*n_layers=*/rconfig.n_layers,
+      /*dropout=*/DropoutStruct::Config{0.0, 0},
+      /*input_mode=*/rconfig.input_mode,
+      /*direction=*/RNNStruct::Direction::kUnidirectional,
+      /*cell=*/rconfig.cell,
+      /*algo=*/rconfig.algo
+    },
+    DType::kFloat
+  );
+  SeqU seqX = std::make_unique<SeqStruct>(rconfig.seq_len, rconfig.batch_size, rconfig.hidden_size, rconfig.dtype);
+  SeqU seqY = std::make_unique<SeqStruct>(rconfig.seq_len, rconfig.batch_size, rconfig.hidden_size, rconfig.dtype);
+  RNNStruct::State stateX(rnn->get_state(rconfig.batch_size));
+  RNNStruct::State stateY(rnn->get_state(rconfig.batch_size));
+  MemoryAllocator allocator;
+  allocator.visit_state(ctx, seqX);
+  allocator.visit_state(ctx, seqY);
+  allocator.visit_state(ctx, stateX);
+  allocator.visit_state(ctx, stateY);
+  allocator.visit_state(ctx, rnn);
+  allocator.visit_workspace(ctx, seqX, rnn);
 
-template <typename T>
-__global__ void _fill_kernel(T *array, int size, T value) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int step = gridDim.x * blockDim.x;
-  for (int i = idx; i < size; i += step) {
-    array[i] = value;
+  void *data;
+  n_bytes_t size;
+  std::vector<int> shape;
+  // w
+  {
+    rnn->get_weight_region(ctx, 0, /*layer=*/0, data, size, shape);
+    copyToDevice<float>(data, size, {});
   }
-}
-
-
-template <typename T>
-void fill(void *array, int size, T value) {
-  T *_array = static_cast<T*>(array);
-  const int blockSize = 256;
-  const int numBlocks = (size + blockSize - 1) / blockSize;
-  _fill_kernel<<<numBlocks, blockSize>>>(_array, size, value);
-}
-
-
-void run(int seq_len, const Rnn::Config &config) {
-  DnnHandle handle;
-  Rnn rnn(handle, config);
-  rnn.alloc();
-  TensorDesc *hcDescs = new TensorDesc[4];
-  for (int i = 0; i < 4; ++i) {
-    rnn.getHCDesc(hcDescs + i);
-    hcDescs[i].alloc();
+  {
+    rnn->get_weight_region(ctx, 0, /*layer=*/1, data, size, shape);
+    copyToDevice<float>(data, size, {-1, 1, -2, 2});
   }
-  TensorDesc &hxDesc = hcDescs[0];
-  TensorDesc &hyDesc = hcDescs[1];
-  TensorDesc &cxDesc = hcDescs[2];
-  TensorDesc &cyDesc = hcDescs[3];
-  TensorDesc *xDesc = new TensorDesc[seq_len];
-  TensorDesc *yDesc = new TensorDesc[seq_len];
-  for (int i = 0; i < seq_len; ++i) {
-    rnn.getXDesc(xDesc + i);
-    rnn.getYDesc(yDesc + i);
+  // b
+  {
+    rnn->get_bias_region(ctx, 0, /*layer=*/0, data, size, shape);
+    copyToDevice<float>(data, size, {-3, 2});
   }
-  void *x;
-  void *y;
-  CUDA(Malloc(&x, xDesc[0].data_bytes * seq_len));
-  CUDA(Malloc(&y, yDesc[0].data_bytes * seq_len));
-  const int cold_start_times = 100;
-  const int benchmark_times = 1000;
-  for (int i = 0; i < cold_start_times; ++i) {
-    try {
-      rnn.forward_inference(
-        /*handle=*/handle,
-        /*seq_len=*/seq_len,
-        /*xDesc=*/xDesc,
-        /*x=*/x,
-        /*hxDesc=*/hxDesc,
-        /*cxDesc=*/cxDesc,
-        /*yDesc=*/yDesc,
-        /*y=*/y,
-        /*hyDesc=*/hyDesc,
-        /*cyDesc=*/cyDesc
-      );
-    } catch (const std::runtime_error &error) {
-      return;
-    }
+  {
+    rnn->get_bias_region(ctx, 0, /*layer=*/1, data, size, shape);
+    copyToDevice<float>(data, size, {-1, 3});
   }
-  double startTime = CycleTimer::currentSeconds();
-  for (int i = 0; i < benchmark_times; ++i) {
-    rnn.forward_inference(
-      /*handle=*/handle,
-      /*seq_len=*/seq_len,
-      /*xDesc=*/xDesc,
-      /*x=*/x,
-      /*hxDesc=*/hxDesc,
-      /*cxDesc=*/cxDesc,
-      /*yDesc=*/yDesc,
-      /*y=*/y,
-      /*hyDesc=*/hyDesc,
-      /*cyDesc=*/cyDesc
-    );
+  // hx
+  // cx
+  rnn->forward_inference(ctx, seqX, stateX, seqY, stateY);
+  std::cout << "=========================================================" << std::endl;
+  for (int i = 0; i < rconfig.cell.n_region_per_layer(); ++i) {
+    rnn->get_weight_region(ctx, 0, i, data, size, shape);
+    print<float>("W[" + std::to_string(i) + "]", shape, data);
   }
-  double endTime = CycleTimer::currentSeconds();
-  CUDA(Free(x));
-  CUDA(Free(y));
-  printf("Average time used: %.4f ms\n", (endTime - startTime) * 1000 / benchmark_times);
-}
-
-
-int main(int argc, const char* argv[]) {
-  using namespace std;
-  CUDA(SetDevice(/*gpu_id=*/0));
-  Rnn::Config config;
-  int seq_len;
-  if (argc == 8) { // parse_args
-    seq_len = std::atoi(argv[1]);
-    config.batch_size = std::atoi(argv[2]);
-    config.input_size = config.hidden_size = std::atoi(argv[3]);
-    config.n_layers = std::atoi(argv[4]);
-    config.input = Rnn::Input::kSkipInput;
-    config.direction = std::unordered_map<std::string, Rnn::Direction>{
-      {"1", Rnn::Direction::kUnidirectional},
-      {"2", Rnn::Direction::kBidirectional}}[argv[5]];
-    config.mode = std::unordered_map<std::string, Rnn::Mode>{
-      {"tanh", Rnn::Mode::kRnnTanh},
-      {"relu", Rnn::Mode::kRnnRelu},
-      {"lstm", Rnn::Mode::kLstm},
-      {"gru", Rnn::Mode::kGru}}[argv[6]];
-    config.algo = std::unordered_map<std::string, Rnn::Algo>{
-      {"std", Rnn::Algo::kStandard},
-      {"ps", Rnn::Algo::kPersistStatic},
-      {"pd", Rnn::Algo::kPersistDynamic}}[argv[7]];
-    config.dtype = DType::kFloat;
+  for (int i = 0; i < rconfig.cell.n_region_per_layer(); ++i) {
+    rnn->get_bias_region(ctx, 0, i, data, size, shape);
+    print<float>("b[" + std::to_string(i) + "]", shape, data);
+  }
+  std::cout << "=========================================================" << std::endl;
+  for (int i = 0; i < rconfig.seq_len; ++i) {
+    seqX->get_step_region(i, data, size);
+    assert(size == rconfig.batch_size * rconfig.hidden_size);
+    print<float>("SeqX[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+  }
+  if (stateX.h) {
+    data = stateX.h->data;
+    print<float>("hx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
   } else {
-    puts("Usage: ./main [seq_len] [batch_size] [hidden_size] [n_layers] [direction] [mode] [algo]");
-    return 1;
+    std::cout << "hx = NULL" << std::endl;
   }
-  std::cout << "============================================================" << std::endl;
-  std::cout << "Sequence length = " << seq_len << std::endl;
-  std::cout << "Batch size = " << config.batch_size << std::endl;
-  std::cout << "Hidden size = " << config.hidden_size << std::endl;
-  std::cout << "Number of layers = " << config.n_layers << std::endl;
-  std::cout << "Input mode = " << to_string(config.input) << std::endl;
-  std::cout << "Direction = " << to_string(config.direction) << std::endl;
-  std::cout << "RNN mode = " << to_string(config.mode) << std::endl;
-  std::cout << "Algo = " << to_string(config.algo) << std::endl;
-  std::cout << "============================================================" << std::endl;
-  run(seq_len, config);
+  if (stateX.c) {
+    data = stateX.c->data;
+    print<float>("cx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+  } else {
+    std::cout << "cx = NULL" << std::endl;
+  }
+  std::cout << "=========================================================" << std::endl;
+  for (int i = 0; i < rconfig.seq_len; ++i) {
+    seqY->get_step_region(i, data, size);
+    assert(size == rconfig.batch_size * rconfig.hidden_size);
+    print<float>("SeqY[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+  }
+  if (stateY.h) {
+    data = stateY.h->data;
+    print<float>("hy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+  } else {
+    std::cout << "hy = NULL" << std::endl;
+  }
+  if (stateY.c) {
+    data = stateY.c->data;
+    print<float>("cy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+  } else {
+    std::cout << "cy = NULL" << std::endl;
+  }
+}
+
+int main() {
+  run();
   return 0;
 }
