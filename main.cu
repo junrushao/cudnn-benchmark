@@ -17,8 +17,9 @@ struct RunConfig {
   DType dtype{DType::kFloat};
 };
 
-void run() {
+void run(int seq_len) {
   RunConfig rconfig;
+  rconfig.seq_len = seq_len;
   Context ctx = cudnn_handles_auto_export::CreateContext();
   RNNU rnn = std::make_unique<RNNStruct>(
     ctx,
@@ -49,75 +50,75 @@ void run() {
   void *data;
   n_bytes_t size;
   std::vector<int> shape;
-  // w
-  {
-    rnn->get_weight_region(ctx, 0, /*layer=*/0, data, size, shape);
-    copyToDevice<float>(data, size, {});
-  }
-  {
-    rnn->get_weight_region(ctx, 0, /*layer=*/1, data, size, shape);
-    copyToDevice<float>(data, size, {-1, 1, -2, 2});
-  }
-  // b
-  {
-    rnn->get_bias_region(ctx, 0, /*layer=*/0, data, size, shape);
-    copyToDevice<float>(data, size, {-3, 2});
-  }
-  {
-    rnn->get_bias_region(ctx, 0, /*layer=*/1, data, size, shape);
-    copyToDevice<float>(data, size, {-1, 3});
-  }
-  // hx
-  // cx
-  rnn->forward_inference(ctx, seqX, stateX, seqY, stateY);
   std::cout << "=========================================================" << std::endl;
   for (int i = 0; i < rconfig.cell.n_region_per_layer(); ++i) {
     rnn->get_weight_region(ctx, 0, i, data, size, shape);
-    print<float>("W[" + std::to_string(i) + "]", shape, data);
+    assert(shape.size() == 3 && shape[0] <= 1);
+    shape = {shape[0], shape[1]};
+    copyToDevice<float>(data, size, gen_rand_vector<float>(size));
+    print<float>("w" + std::to_string(i), shape, data);
   }
   for (int i = 0; i < rconfig.cell.n_region_per_layer(); ++i) {
     rnn->get_bias_region(ctx, 0, i, data, size, shape);
-    print<float>("b[" + std::to_string(i) + "]", shape, data);
+    assert(shape.size() == 3 && shape[0] == 1 && shape[2] == 1);
+    shape = {shape[1]};
+    copyToDevice<float>(data, size, gen_rand_vector<float>(size));
+    print<float>("b" + std::to_string(i), shape, data);
   }
   std::cout << "=========================================================" << std::endl;
   for (int i = 0; i < rconfig.seq_len; ++i) {
     seqX->get_step_region(i, data, size);
     assert(size == rconfig.batch_size * rconfig.hidden_size);
-    print<float>("SeqX[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+    copyToDevice<float>(data, size, gen_rand_vector<float>(rconfig.batch_size * rconfig.hidden_size));
+    // print<float>("seq_x[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume batch_size = 1
+    print<float>("seq_x[" + std::to_string(i) + "]", {rconfig.hidden_size}, data);
   }
   if (stateX.h) {
     data = stateX.h->data;
-    print<float>("hx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // print<float>("hx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume n_layers = 1, n_dirs = 1, batch_size = 1
+    print<float>("hx", {rconfig.hidden_size}, data);
   } else {
-    std::cout << "hx = NULL" << std::endl;
+    std::cout << "hx = None" << std::endl;
   }
   if (stateX.c) {
     data = stateX.c->data;
-    print<float>("cx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // print<float>("cx", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume n_layers = 1, n_dirs = 1, batch_size = 1
+    print<float>("cx", {rconfig.hidden_size}, data);
   } else {
-    std::cout << "cx = NULL" << std::endl;
+    std::cout << "cx = None" << std::endl;
   }
   std::cout << "=========================================================" << std::endl;
+  rnn->forward_inference(ctx, seqX, stateX, seqY, stateY);
   for (int i = 0; i < rconfig.seq_len; ++i) {
     seqY->get_step_region(i, data, size);
     assert(size == rconfig.batch_size * rconfig.hidden_size);
-    print<float>("SeqY[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+    // print<float>("seq_y[" + std::to_string(i) + "]", {rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume batch_size = 1
+    print<float>("seq_y[" + std::to_string(i) + "]", {rconfig.hidden_size}, data);
   }
   if (stateY.h) {
     data = stateY.h->data;
-    print<float>("hy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // print<float>("hy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume n_layers = 1, n_dirs = 1, batch_size = 1
+    print<float>("hy", {rconfig.hidden_size}, data);
   } else {
-    std::cout << "hy = NULL" << std::endl;
+    std::cout << "hy = None" << std::endl;
   }
   if (stateY.c) {
     data = stateY.c->data;
-    print<float>("cy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // print<float>("cy", {rconfig.n_layers * /*n_dirs=*/1, rconfig.batch_size, rconfig.hidden_size}, data);
+    // assume n_layers = 1, n_dirs = 1, batch_size = 1
+    print<float>("cy", {rconfig.hidden_size}, data);
   } else {
-    std::cout << "cy = NULL" << std::endl;
+    std::cout << "cy = None" << std::endl;
   }
 }
 
-int main() {
-  run();
+int main(int argc, char **argv) {
+  srand(1241323);
+  run(std::atoi(argv[1]));
   return 0;
 }
