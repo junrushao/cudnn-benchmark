@@ -97,7 +97,8 @@ public:
 		if (config.cell == CellType::kLSTM) {
 			return State(2, dtype, {n_layers * n_dirs, batch_size, hidden_size});
 		} else {
-			return State(1, dtype, {n_layers * n_dirs, batch_size, hidden_size});
+			// TODO(@junrushao1994): get this back to 1
+			return State(2, dtype, {n_layers * n_dirs, batch_size, hidden_size});
 		}
 	}
 	void forward_inference(const Context &ctx,
@@ -161,7 +162,7 @@ public:
     	/*filterDimA=*/_shape
     ));
 		shape = {_shape[0], _shape[1], _shape[2]};
-		size = _dtype.size_of() * _shape[0] * _shape[1] * _shape[2];
+		size = _shape[0] * _shape[1] * _shape[2];
 	}
 	void get_bias_region(const Context &ctx,
 												 int layer,
@@ -196,7 +197,7 @@ public:
     	/*filterDimA=*/_shape
     ));
 		shape = {_shape[0], _shape[1], _shape[2]};
-		size = _dtype.size_of() * _shape[0] * _shape[1] * _shape[2];
+		size = _shape[0] * _shape[1] * _shape[2];
 	}
 };
 using RNNU = std::unique_ptr<RNNStruct>;

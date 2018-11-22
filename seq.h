@@ -51,8 +51,8 @@ public:
   }
   void get_step_region(int step, void *&data, n_bytes_t &size) {
     n_bytes_t offset = 0;
-    for (int i = 0; i + 1 < step; ++i) {
-      offset += steps[i]->size;
+    for (int i = 0; i < step; ++i) {
+      offset += steps.at(i)->size;
     }
     data = (char *) this->data + offset * dtype.size_of();
     size = steps.at(step)->size;

@@ -33,8 +33,8 @@ void fill(void *array, int size, T value) {
 
 template <typename T>
 void copyToDevice(void *dst, n_bytes_t size, const std::vector<T> &src) {
-  assert(size == src.size() * sizeof(T));
-  CUDA(Memcpy(dst, src.data(), size, cudaMemcpyHostToDevice));
+  assert(size == src.size());
+  CUDA(Memcpy(dst, src.data(), size * sizeof(T), cudaMemcpyHostToDevice));
 }
 
 template <typename T>
@@ -44,15 +44,29 @@ void copyToHost(const std::vector<T> &dst, void *src) {
 
 template <typename T>
 void print(const std::string &name, const std::vector<int> &shape, const std::vector<T> &src) {
-  std::cout << name << ", shape =";
-  for (int v : shape) {
-    std::cout << ' ' << v;
-  }
-  std::cout << std::endl << "  ";
+  std::cout << name << " = np.array(";
+  bool is_first;
+  is_first = true;
+  std::cout << "[";
   for (T v : src) {
-    std::cout << ' ' << v ;
+    if (is_first) {
+      is_first = false;
+    } else {
+      std::cout << ", ";
+    }
+    std::cout << v;
   }
-  std::cout << std::endl;
+  std::cout << "], dtype='float32').reshape([";
+  is_first = true;
+  for (int v : shape) {
+    if (is_first) {
+      is_first = false;
+    } else {
+      std::cout << ", ";
+    }
+    std::cout << v;
+  }
+  std::cout << "])" << std::endl;
 }
 
 template <typename T>
@@ -64,4 +78,18 @@ void print(const std::string &name, const std::vector<int> &shape, void *data) {
   std::vector<T> dst(size);
   copyToHost<T>(dst, data);
   print(name, shape, dst);
+}
+
+template <typename T>
+std::vector<T> gen_rand_vector(int size) {
+  std::vector<T> result(size, 0);
+  for (int i = 0; i < size; ++i) {
+    result[i] = rand() % 10 - 5;
+  }
+  return result;
+}
+
+template <typename T>
+std::vector<T> gen_vector(int size, int value) {
+  return std::vector<T>(size, value);
 }
