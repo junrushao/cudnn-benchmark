@@ -88,3 +88,8 @@ std::vector<T> gen_rand_vector(int size) {
   }
   return result;
 }
+
+template <typename T>
+std::vector<T> gen_vector(int size, int value) {
+  return std::vector<T>(size, value);
+}
