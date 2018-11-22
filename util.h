@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <assert.h>
 
 #include "macro.h"
 #include "cudnn_enums.h"
@@ -31,8 +32,9 @@ void fill(void *array, int size, T value) {
 }
 
 template <typename T>
-void copyToDevice(void *dst, const std::vector<T> &src) {
-  CUDA(Memcpy(dst, src.data(), src.size() * sizeof(T), cudaMemcpyHostToDevice));
+void copyToDevice(void *dst, n_bytes_t size, const std::vector<T> &src) {
+  assert(size == src.size() * sizeof(T));
+  CUDA(Memcpy(dst, src.data(), size, cudaMemcpyHostToDevice));
 }
 
 template <typename T>

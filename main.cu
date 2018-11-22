@@ -45,11 +45,31 @@ void run() {
   allocator.visit_state(ctx, stateY);
   allocator.visit_state(ctx, rnn);
   allocator.visit_workspace(ctx, seqX, rnn);
-  rnn->forward_inference(ctx, seqX, stateX, seqY, stateY);
 
   void *data;
   n_bytes_t size;
   std::vector<int> shape;
+  // w
+  {
+    rnn->get_weight_region(ctx, 0, /*layer=*/0, data, size, shape);
+    copyToDevice<float>(data, size, {});
+  }
+  {
+    rnn->get_weight_region(ctx, 0, /*layer=*/1, data, size, shape);
+    copyToDevice<float>(data, size, {-1, 1, -2, 2});
+  }
+  // b
+  {
+    rnn->get_bias_region(ctx, 0, /*layer=*/0, data, size, shape);
+    copyToDevice<float>(data, size, {-3, 2});
+  }
+  {
+    rnn->get_bias_region(ctx, 0, /*layer=*/1, data, size, shape);
+    copyToDevice<float>(data, size, {-1, 3});
+  }
+  // hx
+  // cx
+  rnn->forward_inference(ctx, seqX, stateX, seqY, stateY);
   std::cout << "=========================================================" << std::endl;
   for (int i = 0; i < rconfig.cell.n_region_per_layer(); ++i) {
     rnn->get_weight_region(ctx, 0, i, data, size, shape);
