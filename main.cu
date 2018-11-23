@@ -9,7 +9,7 @@ using Context = cudnn_handles_auto_export::Context;
 struct RunConfig {
   int seq_len{1};
   int hidden_size{2};
-  RNNStruct::CellType cell{RNNStruct::CellType::kTanH};
+  RNNStruct::CellType cell{RNNStruct::CellType::kLSTM};
   RNNStruct::Algo algo{RNNStruct::Algo::kStandard};
   int n_layers{1};
   int batch_size{1};
