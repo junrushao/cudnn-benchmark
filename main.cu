@@ -13,7 +13,7 @@ struct RunConfig {
   RNNStruct::Algo algo{RNNStruct::Algo::kStandard};
   int n_layers{1};
   int batch_size{1};
-  RNNStruct::InputMode input_mode{RNNStruct::InputMode::kSkipInput};
+  RNNStruct::InputMode input_mode{RNNStruct::InputMode::kLinearInput};
   DType dtype{DType::kFloat};
 };
 
