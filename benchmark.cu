@@ -64,8 +64,8 @@ void run() {
   using Algo = RNNStruct::Algo;
   int counter = 0;
   std::cerr << "idx,seq_len,hidden_size,cell,algo,time(ms)" << std::endl;
-  for (int seq_len : {1, 2, 4, 8, 16, 32, 64, 128})
-  for (int hidden_size: {1, 2, 4, 8, 16, 32, 64, 128})
+  for (int seq_len : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512})
+  for (int hidden_size: {1, 2, 4, 8, 16, 32, 64, 128, 256, 512})
   for (CellType cell: {CellType::kTanH, CellType::kGRU, CellType::kLSTM})
   for (Algo algo: {Algo::kStandard, Algo::kPersistStatic}) {
     if (true) {
