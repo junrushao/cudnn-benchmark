@@ -84,7 +84,7 @@ public:
       /*dataType*/dtype.v
     ));
     if (filter_bytes % dtype.size_of() != 0) {
-      std::runtime_error("Indivisible!");
+      throw std::runtime_error("Indivisible!");
     }
 		int filter_size = static_cast<int>(filter_bytes);
 		filter_size /= dtype.size_of();
